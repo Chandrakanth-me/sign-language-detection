@@ -1,0 +1,6 @@
+Flask==3.0.0
+gunicorn
+numpy
+opencv-python-headless
+mediapipe
+scikit-learn

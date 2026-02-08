@@ -1,0 +1,563 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <title>Sign Language to Text Detector</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+            color: #333;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            overflow: hidden;
+        }
+
+        header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 18px 30px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 20px;
+        }
+
+        header .brand {
+            display:flex;
+            align-items:center;
+            gap:12px;
+        }
+        header h1 { font-size: 1.4rem; margin: 0; text-shadow: 2px 2px 4px rgba(0,0,0,0.15); }
+        header p { font-size: 0.9rem; opacity: 0.95; margin-top: 4px; }
+
+        nav {
+            display:flex;
+            gap:12px;
+        }
+        nav a {
+            color: rgba(255,255,255,0.95);
+            text-decoration:none;
+            padding:8px 12px;
+            border-radius:8px;
+            font-weight:600;
+            font-size:0.95rem;
+            cursor:pointer;
+        }
+        nav a.active { background: rgba(255,255,255,0.12); box-shadow: inset 0 -3px 0 rgba(0,0,0,0.05); }
+        nav a:hover { background: rgba(255,255,255,0.08); }
+
+        .main-area {
+            padding: 24px;
+        }
+
+        .main-content {
+            display: grid;
+            grid-template-columns: 4fr 2fr 1fr; /* <-- 4:2:1 ratio */
+            gap: 20px;
+            align-items: start;
+        }
+
+        /* Webcam column */
+        .video-section { position: relative; }
+        .video-wrapper {
+            position: relative;
+            border-radius: 15px;
+            overflow: hidden;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            background: #000;
+        }
+        #video-stream {
+            width: 100%;
+            height: auto;
+            display: block;
+            object-fit: cover;
+            min-height: 360px;
+        }
+
+        /* Side image column */
+        .image-section {
+            display:flex;
+            flex-direction:column;
+            gap: 16px;
+        }
+        .image-card {
+            background: #f8f9fa;
+            border-radius: 12px;
+            padding: 12px;
+            box-shadow: 0 6px 18px rgba(0,0,0,0.08);
+            text-align:center;
+        }
+        #side-image {
+            width: 100%;
+            height: auto;
+            border-radius: 8px;
+            max-height: 420px;
+            object-fit: contain;
+        }
+
+        /* Controls (rightmost) */
+        .controls-section { display:flex; flex-direction:column; gap:16px; }
+        .card {
+            background: #f8f9fa;
+            border-radius: 12px;
+            padding: 16px;
+            box-shadow: 0 6px 18px rgba(0,0,0,0.08);
+        }
+        .card h2 {
+            color: #667eea;
+            margin-bottom: 12px;
+            font-size: 1.05rem;
+            display:flex;
+            align-items:center;
+            gap:10px;
+        }
+
+        .text-display {
+            background: white;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            padding: 12px;
+            min-height: 48px;
+            font-size: 1rem;
+            font-weight: 600;
+            color: #333;
+            word-wrap: break-word;
+        }
+
+        .letter-display {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            font-size: 2.2rem;
+            text-align: center;
+            padding: 16px;
+            border-radius: 8px;
+            font-weight: 700;
+            min-height: 88px;
+            display:flex;
+            align-items:center;
+            justify-content:center;
+            box-shadow: 0 4px 15px rgba(102,126,234,0.35);
+        }
+
+        .controls-grid {
+            display:grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap:10px;
+            margin-top:8px;
+        }
+
+        button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 10px 12px;
+            border-radius: 10px;
+            font-size: 0.95rem;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.18s ease;
+            display:flex;
+            align-items:center;
+            justify-content:center;
+            gap:8px;
+        }
+        button.danger { background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); }
+        button.full-width { grid-column: 1 / -1; }
+
+        .status-indicator {
+            display:inline-block;
+            width:10px;height:10px;border-radius:50%;
+            background:#4caf50; animation:pulse 2s infinite;
+        }
+        @keyframes pulse { 0%,100%{opacity:1}50%{opacity:0.5} }
+
+        .instructions {
+            background: #eaf3ff;
+            border-left:4px solid #1976d2;
+            padding:12px;
+            border-radius:8px;
+            margin-top:14px;
+        }
+        .instructions h3 { color:#1976d2; margin-bottom:8px; }
+        .instructions ul { margin-left:18px; color:#444; }
+        .instructions li { margin-bottom:6px; }
+
+        .muted-small { font-size:0.9rem; color:#666; }
+
+        /* Page containers for routing */
+        .page { display: none; }
+        .page.active { display: block; }
+
+        /* Feedback/About content styles */
+        .doc-card { background:#fff; border-radius:12px; padding:18px; box-shadow:0 8px 30px rgba(0,0,0,0.06); margin-bottom:16px; }
+        .doc-card h3 { color:#444; margin-bottom:10px; }
+        .doc-card p { color:#444; line-height:1.45; margin-bottom:10px; }
+
+        @media (max-width: 968px) {
+            .main-content { grid-template-columns: 1fr; }
+            header { flex-direction: column; gap:12px; align-items:flex-start; }
+            #video-stream { min-height: 300px; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div class="brand">
+                <div style="font-size:1.6rem;">🤟</div>
+                <div>
+                    <h1>Sign Language to Text</h1>
+                    <p style="margin-top:2px; font-size:0.85rem; opacity:0.95;">Real-time hand gesture recognition</p>
+                </div>
+            </div>
+
+            <nav>
+                <a id="nav-home" class="active" onclick="showSection('home')">Home</a>
+                <a id="nav-feedback" onclick="showSection('feedback')">Feedback and reviews</a>
+                <a id="nav-about" onclick="showSection('about')">About</a>
+            </nav>
+        </header>
+
+        <div class="main-area">
+            <!-- Home page -->
+            <div id="page-home" class="page active">
+                <div class="main-content">
+                    <!-- Webcam (4 parts) -->
+                    <div class="video-section">
+                        <div class="video-wrapper">
+                            <!-- using the video_feed route as src for multipart JPEG stream -->
+
+                            <img id="video-stream" src="{{ url_for('video_feed') }}" alt="Video Stream">
+                        </div>
+
+                        <div class="instructions" id="instructions">
+                            <h3>📋 Instructions</h3>
+                            <ul>
+                                <li>Show hand signs A–Z or 0–9 to the camera</li>
+                                <li>Click "Add Letter" to append detected letter to word</li>
+                                <li>Click "Add Space" to append word to sentence</li>
+                                <li>Use "Backspace" to remove last character from word</li>
+                                <li>Click "Clear All" to reset everything</li>
+                            </ul>
+                        </div>
+                    </div>
+
+                    <!-- Image (2 parts) -->
+                    <div class="image-section">
+                        <div class="image-card">
+                            <h3 style="color:#444; margin-bottom:8px;">Reference Image</h3>
+                            <!-- Put gesture_signs_image.png into project_root/static/ -->
+                            <img id="side-image" src="{{ url_for('static', filename='gesture_signs_image.png') }}" alt="Gesture Reference">
+                        </div>
+
+                        <div class="image-card" style="text-align:left;">
+                            <h4 style="color:#666; margin-bottom:6px;">Tip</h4>
+                            <p style="font-size:0.95rem; color:#555; margin-bottom:8px;">
+                                Keep your hand centered in frame and avoid heavy backlight for better detection.
+                            </p>
+
+                            <!-- Project credit inserted near tip as requested -->
+                            <p class="muted-small" style="margin-top:6px;">
+                                <strong>Project by:</strong> Anusha, Chandrakanth, Harish, and team.
+                            </p>
+                        </div>
+                        <div class="image-card" style="text-align:left;">
+    <h4 style="color:#666; margin-bottom:6px;">Did you know?</h4>
+    <p style="font-size:0.95rem; color:#555; margin-bottom:6px;">
+        • Over 70 million people worldwide use sign language as their primary mode of communication.
+    </p>
+    <p style="font-size:0.95rem; color:#555; margin-bottom:6px;">
+        • Hand-gesture recognition helps bridge communication gaps in hospitals, classrooms, and public services.
+    </p>
+    <p style="font-size:0.95rem; color:#555;">
+        • Consistent lighting and a clear background significantly improve recognition accuracy.
+    </p>
+</div>
+
+                    </div>
+
+                    <!-- Controls (1 part) -->
+                    <div class="controls-section">
+                        <div class="card">
+                            <h2><span class="status-indicator"></span> Current Letter</h2>
+                            <div class="letter-display" id="current-letter">-</div>
+                        </div>
+
+                        <div class="card">
+                            <h2>📝 Word</h2>
+                            <div class="text-display" id="word-display">-</div>
+                        </div>
+
+                        <div class="card">
+                            <h2>📄 Sentence</h2>
+                            <div class="text-display" id="sentence-display">-</div>
+                        </div>
+
+                        <div class="card">
+                            <h2>🎮 Controls</h2>
+                            <div class="controls-grid">
+                                <button onclick="addLetter()"><span>➕</span> Add Letter</button>
+                                <button onclick="addSpace()"><span>⎵</span> Add Space</button>
+                                <button onclick="backspace()"><span>⌫</span> Backspace</button>
+                                <button class="danger" onclick="clearAll()"><span>🗑️</span> Clear All</button>
+                                <button class="full-width" onclick="downloadSentence()">⬇️ Download</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Feedback page -->
+            <div id="page-feedback" class="page">
+                <div class="doc-card">
+                    <h3>Feedback & Reviews — Help us improve</h3>
+                    <p>
+                        Your detailed feedback drives improvements in both the model and user experience.
+                        If you used the demo, please tell us about:
+                    </p>
+                    <ul style="margin-left:18px; color:#444; margin-bottom:12px;">
+                        <li>Gesture detection accuracy (how often did the shown letter match what you meant?)</li>
+                        <li>Latency & responsiveness (was detection fast enough?)</li>
+                        <li>UI clarity (were controls and displays intuitive?)</li>
+                        <li>Device & lighting issues (phone vs laptop, indoor vs outdoor, backlight, low light)</li>
+                        <li>Accessibility concerns (font sizes, colors, contrast, language support)</li>
+                    </ul>
+
+                    <p>
+                        <strong>What we do with feedback:</strong> Survey responses are analyzed to identify common failure modes (e.g., confusing pairs of gestures, lighting-related errors, skin-tone bias). High-impact issues are prioritized for model retraining and UI fixes.
+                    </p>
+
+                    <p>
+                        <strong>Ways to send feedback:</strong>
+                    </p>
+                    <ol style="margin-left:18px; color:#444; margin-bottom:12px;">
+                        <li>Quick in-app survey (POST to <code>/submit_feedback</code>) — ideal for short answers & ratings.</li>
+                        <li>Detailed report with screenshots and sample video clips — preferred when reporting reproducible errors.</li>
+                        <li>Email or bug report with device details (camera model, browser, OS) and steps to reproduce.</li>
+                    </ol>
+
+                    <p>
+                        <strong>Privacy & data policy:</strong> When you submit logs or video clips, they are used for debugging and model improvement only. Personal data is removed or anonymized where possible. Always review consent prompts before sharing recordings.
+                    </p>
+                </div>
+
+                <div class="doc-card">
+                    <h3>Quick feedback form</h3>
+                    <p style="margin-bottom:10px;">Submit a quick rating and a short note (this is client-side only — connect to your endpoint to store feedback):</p>
+                    <div style="display:flex; gap:8px; margin-bottom:8px;">
+                        <select id="fb-rating" style="padding:8px; border-radius:8px; border:1px solid #ddd; min-width:140px;">
+                            <option value="">Rating (1-5)</option>
+                            <option>1 - Poor</option>
+                            <option>2 - Fair</option>
+                            <option>3 - Good</option>
+                            <option>4 - Very Good</option>
+                            <option>5 - Excellent</option>
+                        </select>
+                        <button onclick="submitFeedback()" style="padding:8px 12px; border-radius:8px;">Submit</button>
+                    </div>
+                    <textarea id="fb-note" placeholder="Short note (lighting, device, gesture issues)..." style="width:100%; min-height:120px; border-radius:8px; border:1px solid #e5e5e5; padding:10px;"></textarea>
+                    <p class="muted-small" style="margin-top:8px;">
+                        Clicking submit will send this to the demo endpoint <code>/submit_feedback</code> if available. If your deployment doesn't have the endpoint, the demo will show a success message locally.
+                    </p>
+                </div>
+            </div>
+
+            <!-- About page -->
+            <div id="page-about" class="page">
+                <div class="doc-card">
+                    <h3>About this project</h3>
+                    <p>
+                        This demo converts hand gestures into readable text in real time. It is intended as a prototype to explore camera-based gesture recognition and accessibility features for hearing-impaired users.
+                    </p>
+
+                    <h4 style="margin-top:8px; margin-bottom:8px;">Why this matters</h4>
+                    <p>
+                        Communication barriers affect daily life — converting gestures to text helps in education, quick conversations, public services, and emergency situations. Small, deployable systems can empower users who rely on sign-based communication.
+                    </p>
+
+                    <h4 style="margin-top:8px; margin-bottom:8px;">Research & surveys</h4>
+                    <p>
+                        We run periodic user surveys and small-scale studies to:
+                    </p>
+                    <ul style="margin-left:18px; color:#444; margin-bottom:12px;">
+                        <li>Collect common gesture usage in different regions and contexts.</li>
+                        <li>Measure model performance across lighting conditions and camera qualities.</li>
+                        <li>Assess accessibility concerns (readability, latency, cognitive load).</li>
+                    </ul>
+
+                    <h4 style="margin-top:8px; margin-bottom:8px;">Deployment considerations</h4>
+                    <p>
+                        Real-world deployments need:
+                    </p>
+                    <ul style="margin-left:18px; color:#444; margin-bottom:12px;">
+                        <li>Extensive testing across skin tones and backgrounds to avoid bias.</li>
+                        <li>On-device processing or secure, low-latency servers for privacy and speed.</li>
+                        <li>Configurable UI (font size, color themes) and multi-language support for labels and instructions.</li>
+                    </ul>
+                </div>
+
+                <div class="doc-card">
+                    <h3>Credits & contact</h3>
+                    <p>
+                        <strong>Project by:</strong> Anusha, Chandrakanth, Harish, and team.
+                    </p>
+                    <p>
+                        For collaboration or research inquiries, connect via the project's repository or email (add your contact link on deploy).
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Simple client-side routing between Home / Feedback / About
+        function showSection(name) {
+            // pages
+            const pages = ['home', 'feedback', 'about'];
+            pages.forEach(p => {
+                const el = document.getElementById('page-' + p);
+                const nav = document.getElementById('nav-' + p);
+                if (el) el.classList.toggle('active', p === name);
+                if (nav) nav.classList.toggle('active', p === name);
+            });
+            // when coming back to home, ensure UI updates continue
+            if (name === 'home') {
+                startTextUpdates();
+            } else {
+                stopTextUpdates(); // pause regular UI polling to reduce requests when not needed
+            }
+        }
+
+        // Text update polling (only active on Home)
+        let pollInterval = null;
+        function startTextUpdates() {
+            if (pollInterval) return;
+            pollInterval = setInterval(updateText, 200);
+            updateText();
+        }
+        function stopTextUpdates() {
+            if (pollInterval) {
+                clearInterval(pollInterval);
+                pollInterval = null;
+            }
+        }
+
+        // Start updates initially (home is default)
+        startTextUpdates();
+
+        function updateText() {
+            fetch('/get_text')
+                .then(response => response.json())
+                .then(data => {
+                    const elLetter = document.getElementById('current-letter');
+                    const elWord = document.getElementById('word-display');
+                    const elSentence = document.getElementById('sentence-display');
+                    if (elLetter) elLetter.textContent = data.letter || '-';
+                    if (elWord) elWord.textContent = data.word || '-';
+                    if (elSentence) elSentence.textContent = data.sentence || '-';
+                })
+                .catch(err => {
+                    // ignore; keep UI stable
+                    console.debug('get_text fetch failed', err);
+                });
+        }
+
+        function addLetter() {
+            fetch('/add_letter', {method: 'POST'})
+                .then(() => updateText())
+                .catch(()=>{});
+        }
+
+        function addSpace() {
+            fetch('/add_space', {method: 'POST'})
+                .then(() => updateText())
+                .catch(()=>{});
+        }
+
+        function backspace() {
+            fetch('/backspace', {method: 'POST'})
+                .then(() => updateText())
+                .catch(()=>{});
+        }
+
+        function clearAll() {
+            if (confirm('Are you sure you want to clear everything?')) {
+                fetch('/clear_all', {method: 'POST'})
+                    .then(() => updateText())
+                    .catch(()=>{});
+            }
+        }
+
+        function downloadSentence() {
+            fetch('/get_text')
+                .then(res => res.json())
+                .then(data => {
+                    const blob = new Blob([data.sentence || ''], { type: 'text/plain' });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = 'sentence.txt';
+                    document.body.appendChild(a);
+                    a.click();
+                    a.remove();
+                    URL.revokeObjectURL(url);
+                })
+                .catch(()=>{});
+        }
+
+        // Feedback submission (client-side; posts to /submit_feedback if available)
+        function submitFeedback() {
+            const rating = document.getElementById('fb-rating').value;
+            const note = document.getElementById('fb-note').value;
+            const payload = { rating, note, timestamp: new Date().toISOString() };
+
+            fetch('/submit_feedback', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            })
+            .then(res => {
+                if (res.ok) {
+                    alert('Thank you! Feedback submitted.');
+                    document.getElementById('fb-rating').value = '';
+                    document.getElementById('fb-note').value = '';
+                } else {
+                    // If endpoint missing, still show success locally
+                    alert('Feedback recorded locally (no server endpoint).');
+                }
+            })
+            .catch(() => {
+                // fallback for demo deployments without endpoint
+                alert('Feedback recorded locally (no server endpoint).');
+            });
+        }
+
+        // Keyboard shortcuts (work when on Home)
+        document.addEventListener('keydown', function(event) {
+            // only process shortcuts if Home is active
+            if (!document.getElementById('page-home').classList.contains('active')) return;
+            if (event.key === 's') addLetter();
+            if (event.key === ' ') {
+                event.preventDefault();
+                addSpace();
+            }
+            if (event.key === 'Backspace') {
+                event.preventDefault();
+                backspace();
+            }
+            if (event.key === 'c') clearAll();
+        });
+    </script>
+</body>
+</html>
